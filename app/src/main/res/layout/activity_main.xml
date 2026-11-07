@@ -22,7 +22,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="4dp"
-            android:text="Mojo-style virtual mouse · PNG · scale · speed · size"
+            android:text="Mojo-style · trackpad · PNG · scale · speed"
             android:textColor="#AEAEB2"
             android:textSize="13sp" />
 
@@ -64,10 +64,17 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_margin="8dp"
-                android:text="Drag here to preview movement"
+                android:text="Drag here to preview"
                 android:textColor="#8E8E93"
                 android:textSize="12sp" />
         </FrameLayout>
+
+        <TextView android:id="@+id/modeValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textColor="#FFF" android:text="Control mode" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal">
+            <Button android:id="@+id/btnModeTrackpad" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Trackpad" android:textSize="12sp" />
+            <Button android:id="@+id/btnModeFullscreen" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:text="Fullscreen" android:textSize="12sp" />
+            <Button android:id="@+id/btnModeMouse" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="4dp" android:text="Mouse" android:textSize="12sp" />
+        </LinearLayout>
 
         <TextView android:id="@+id/scaleValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textColor="#FFF" android:text="Scale" />
         <SeekBar android:id="@+id/seekScale" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="400" android:min="25" />
@@ -87,8 +94,8 @@
         <Button android:id="@+id/btnPickPng" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Choose custom PNG cursor" />
         <Button android:id="@+id/btnResetPng" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reset to default arrow" />
 
-        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="1. Enable Accessibility (required to move)" />
-        <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="2. Grant overlay permission (fallback)" />
+        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Enable Accessibility (required)" />
+        <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Overlay permission (fallback)" />
 
         <LinearLayout
             android:layout_width="match_parent"
@@ -96,8 +103,7 @@
             android:layout_marginTop="12dp"
             android:layout_marginBottom="32dp"
             android:orientation="horizontal">
-
-            <Button android:id="@+id/btnStart" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Start cursor" />
+            <Button android:id="@+id/btnStart" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Start / refresh" />
             <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Stop overlay" />
         </LinearLayout>
     </LinearLayout>
