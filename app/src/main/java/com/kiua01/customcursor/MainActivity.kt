@@ -24,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var speedValue: TextView
     private lateinit var opacityValue: TextView
     private lateinit var smoothValue: TextView
+    private lateinit var modeValue: TextView
     private lateinit var preview: CursorView
     private lateinit var howTo: TextView
 
@@ -53,99 +54,89 @@ class MainActivity : AppCompatActivity() {
         speedValue = findViewById(R.id.speedValue)
         opacityValue = findViewById(R.id.opacityValue)
         smoothValue = findViewById(R.id.smoothValue)
+        modeValue = findViewById(R.id.modeValue)
         preview = findViewById(R.id.previewCursor)
         howTo = findViewById(R.id.howToText)
         preview.loadFromPrefs()
         preview.setNormalizedPosition(0.5f, 0.5f)
 
         howTo.text = """
-            How to use (make it MOVE):
-            1) Tap “Enable Accessibility” → find “Custom Cursor” → turn ON
-            2) Drag your finger on the screen → cursor follows (speed applies)
-            3) Short tap → clicks under the cursor
-            4) Physical mouse (Android 13+): cursor follows the mouse
-            
-            Overlay-only mode (no Accessibility): drag on the full-screen layer to move.
+            1) Enable Accessibility for “Custom Cursor”
+            2) Default mode = TRACKPAD (recommended)
+               · Drag the pad → move cursor
+               · Tap the pad → click
+               · Blue ▶ button → pause controls (free screen)
+            3) Physical mouse works on Android 13+
+            4) Pick any PNG for the cursor look
         """.trimIndent()
 
-        setupSeek(R.id.seekScale, (CursorPrefs.scale(this) * 100).toInt().coerceIn(25, 400)) { progress ->
-            val v = progress / 100f
-            CursorPrefs.setScale(this, v)
-            scaleValue.text = "Scale: %.2f".format(v)
-            preview.loadFromPrefs()
-            notifyRunning()
+        setupSeek(R.id.seekScale, (CursorPrefs.scale(this) * 100).toInt().coerceIn(25, 400)) { p ->
+            CursorPrefs.setScale(this, p / 100f)
+            scaleValue.text = "Scale: %.2f".format(p / 100f)
+            preview.loadFromPrefs(); notifyRunning()
         }
         scaleValue.text = "Scale: %.2f".format(CursorPrefs.scale(this))
 
-        setupSeek(R.id.seekSize, CursorPrefs.sizePx(this).coerceIn(16, 256)) { progress ->
-            CursorPrefs.setSizePx(this, progress)
-            sizeValue.text = "Size: ${progress}px"
-            preview.loadFromPrefs()
-            notifyRunning()
+        setupSeek(R.id.seekSize, CursorPrefs.sizePx(this).coerceIn(16, 256)) { p ->
+            CursorPrefs.setSizePx(this, p)
+            sizeValue.text = "Size: ${p}px"
+            preview.loadFromPrefs(); notifyRunning()
         }
         sizeValue.text = "Size: ${CursorPrefs.sizePx(this)}px"
 
-        setupSeek(R.id.seekSpeed, (CursorPrefs.speed(this) * 100).toInt().coerceIn(10, 500)) { progress ->
-            val v = progress / 100f
-            CursorPrefs.setSpeed(this, v)
-            speedValue.text = "Speed: %.2f".format(v)
+        setupSeek(R.id.seekSpeed, (CursorPrefs.speed(this) * 100).toInt().coerceIn(10, 500)) { p ->
+            CursorPrefs.setSpeed(this, p / 100f)
+            speedValue.text = "Speed: %.2f".format(p / 100f)
             notifyRunning()
         }
         speedValue.text = "Speed: %.2f".format(CursorPrefs.speed(this))
 
-        setupSeek(R.id.seekOpacity, (CursorPrefs.opacity(this) * 100).toInt().coerceIn(10, 100)) { progress ->
-            val v = progress / 100f
-            CursorPrefs.setOpacity(this, v)
-            opacityValue.text = "Opacity: %.0f%%".format(v * 100)
-            preview.loadFromPrefs()
-            notifyRunning()
+        setupSeek(R.id.seekOpacity, (CursorPrefs.opacity(this) * 100).toInt().coerceIn(10, 100)) { p ->
+            CursorPrefs.setOpacity(this, p / 100f)
+            opacityValue.text = "Opacity: %.0f%%".format(p.toFloat())
+            preview.loadFromPrefs(); notifyRunning()
         }
         opacityValue.text = "Opacity: %.0f%%".format(CursorPrefs.opacity(this) * 100)
 
-        setupSeek(R.id.seekSmooth, (CursorPrefs.smoothing(this) * 100).toInt().coerceIn(0, 95)) { progress ->
-            val v = progress / 100f
-            CursorPrefs.setSmoothing(this, v)
-            smoothValue.text = "Smoothing: %.0f%%".format(v * 100)
+        setupSeek(R.id.seekSmooth, (CursorPrefs.smoothing(this) * 100).toInt().coerceIn(0, 95)) { p ->
+            CursorPrefs.setSmoothing(this, p / 100f)
+            smoothValue.text = "Smoothing: %.0f%%".format(p.toFloat())
             notifyRunning()
         }
         smoothValue.text = "Smoothing: %.0f%%".format(CursorPrefs.smoothing(this) * 100)
 
+        refreshModeLabel()
+        findViewById<Button>(R.id.btnModeTrackpad).setOnClickListener { setMode(CursorPrefs.MODE_TRACKPAD) }
+        findViewById<Button>(R.id.btnModeFullscreen).setOnClickListener { setMode(CursorPrefs.MODE_FULLSCREEN) }
+        findViewById<Button>(R.id.btnModeMouse).setOnClickListener { setMode(CursorPrefs.MODE_MOUSE) }
+
         findViewById<Button>(R.id.btnPickPng).setOnClickListener { pickPng.launch("image/*") }
         findViewById<Button>(R.id.btnResetPng).setOnClickListener {
             CursorPrefs.setPngPath(this, null)
-            preview.loadFromPrefs()
-            notifyRunning()
+            preview.loadFromPrefs(); notifyRunning()
             Toast.makeText(this, "Default cursor restored", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnOverlayPermission).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-                startActivity(
-                    Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-                )
-            } else {
-                Toast.makeText(this, "Overlay permission already granted", Toast.LENGTH_SHORT).show()
-            }
+                startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
+            } else Toast.makeText(this, "Overlay OK", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "Find “Custom Cursor” and enable it", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable “Custom Cursor”", Toast.LENGTH_LONG).show()
         }
         findViewById<Button>(R.id.btnStart).setOnClickListener { startCursor() }
         findViewById<Button>(R.id.btnStop).setOnClickListener { stopCursor() }
 
-        // Preview area: finger moves cursor in the box
         findViewById<View>(R.id.previewArea).setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    val x = event.x / v.width * preview.width
-                    val y = event.y / v.height * preview.height
-                    preview.setPixelPosition(x, y)
+                    preview.setPixelPosition(event.x / v.width * preview.width, event.y / v.height * preview.height)
                     true
                 }
                 else -> false
             }
         }
-
         refreshStatus()
     }
 
@@ -154,6 +145,23 @@ class MainActivity : AppCompatActivity() {
         refreshStatus()
         preview.loadFromPrefs()
         notifyRunning()
+    }
+
+    private fun setMode(mode: Int) {
+        CursorPrefs.setMode(this, mode)
+        refreshModeLabel()
+        notifyRunning()
+        Toast.makeText(this, "Mode: ${modeName(mode)}", Toast.LENGTH_SHORT).show()
+    }
+
+    private fun modeName(mode: Int) = when (mode) {
+        CursorPrefs.MODE_FULLSCREEN -> "Fullscreen drag"
+        CursorPrefs.MODE_MOUSE -> "Mouse only"
+        else -> "Trackpad"
+    }
+
+    private fun refreshModeLabel() {
+        modeValue.text = "Control mode: ${modeName(CursorPrefs.mode(this))}"
     }
 
     private fun setupSeek(id: Int, initial: Int, onChange: (Int) -> Unit) {
@@ -169,30 +177,22 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCursor() {
-        // Prefer accessibility (full movement + click)
         if (!CursorAccessibilityService.isEnabled(this)) {
-            Toast.makeText(
-                this,
-                "Enable Accessibility for Custom Cursor (best). Opening settings…",
-                Toast.LENGTH_LONG
-            ).show()
+            Toast.makeText(this, "Enable Accessibility first", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         } else {
             CursorAccessibilityService.instance?.reloadPrefs()
-            Toast.makeText(this, "Accessibility cursor already active", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, "Cursor active — use trackpad", Toast.LENGTH_SHORT).show()
         }
-
-        // Also start overlay fallback if permission granted
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
-            startActivity(
-                Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName"))
-            )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this) &&
+            !CursorAccessibilityService.isEnabled(this)
+        ) {
+            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
         } else if (!CursorAccessibilityService.isEnabled(this)) {
             CursorPrefs.setEnabled(this, true)
             val intent = Intent(this, CursorOverlayService::class.java)
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
             else startService(intent)
-            Toast.makeText(this, "Overlay cursor started — drag to move", Toast.LENGTH_LONG).show()
         }
         refreshStatus()
     }
@@ -200,28 +200,20 @@ class MainActivity : AppCompatActivity() {
     private fun stopCursor() {
         CursorPrefs.setEnabled(this, false)
         stopService(Intent(this, CursorOverlayService::class.java))
-        Toast.makeText(
-            this,
-            "Overlay stopped. Turn off Accessibility in system settings to fully stop.",
-            Toast.LENGTH_LONG
-        ).show()
+        Toast.makeText(this, "Overlay stopped. Disable Accessibility to fully stop.", Toast.LENGTH_LONG).show()
         refreshStatus()
     }
 
     private fun notifyRunning() {
         CursorAccessibilityService.instance?.reloadPrefs()
-        if (CursorPrefs.isEnabled(this)) {
-            startService(Intent(this, CursorOverlayService::class.java))
-        }
+        if (CursorPrefs.isEnabled(this)) startService(Intent(this, CursorOverlayService::class.java))
     }
 
     private fun refreshStatus() {
-        val overlay = Build.VERSION.SDK_INT < Build.VERSION_CODES.M || Settings.canDrawOverlays(this)
         val a11y = CursorAccessibilityService.isEnabled(this)
         statusText.text = buildString {
-            append(if (a11y) "● Accessibility ON (cursor moves)" else "○ Accessibility OFF")
-            append("  ·  Overlay: ")
-            append(if (overlay) "OK" else "NEED")
+            append(if (a11y) "● Accessibility ON" else "○ Accessibility OFF")
+            append("  ·  Mode: ${modeName(CursorPrefs.mode(this@MainActivity))}")
             append("  ·  PNG: ")
             append(if (CursorPrefs.pngPath(this@MainActivity) != null) "custom" else "default")
         }
