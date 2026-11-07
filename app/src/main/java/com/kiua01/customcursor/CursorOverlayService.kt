@@ -11,13 +11,13 @@ import android.os.Build
 import android.os.IBinder
 import android.view.Gravity
 import android.view.MotionEvent
-import android.view.View
 import android.view.WindowManager
 import androidx.core.app.NotificationCompat
 
 /**
- * System overlay that draws the virtual cursor and tracks pointer / relative motion.
- * Requires SYSTEM_ALERT_WINDOW permission.
+ * Fallback overlay when Accessibility is not enabled.
+ * Drag anywhere on the transparent layer to move the cursor (relative).
+ * Prefer CursorAccessibilityService for real mouse tracking + click injection.
  */
 class CursorOverlayService : Service() {
 
@@ -29,6 +29,8 @@ class CursorOverlayService : Service() {
     private var posY = 0f
     private var smoothX = 0f
     private var smoothY = 0f
+    private var lastX = 0f
+    private var lastY = 0f
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -82,12 +84,12 @@ class CursorOverlayService : Service() {
             @Suppress("DEPRECATION")
             WindowManager.LayoutParams.TYPE_PHONE
 
+        // Touchable so we can drag to move the cursor
         params = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
             type,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE or
                 WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
                 WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT
@@ -95,38 +97,54 @@ class CursorOverlayService : Service() {
             gravity = Gravity.TOP or Gravity.START
         }
 
-        val view = CursorView(this).also { cursorView = it }
-        view.loadFromPrefs()
-
-        // Seed center
         val dm = resources.displayMetrics
         posX = dm.widthPixels / 2f
         posY = dm.heightPixels / 2f
         smoothX = posX
         smoothY = posY
+
+        val view = CursorView(this).also { cursorView = it }
+        view.loadFromPrefs()
         view.setPixelPosition(posX, posY)
 
-        windowManager?.addView(view, params)
-
-        // Pointer capture is limited without accessibility; we also expose update API.
-        // Relative motion can be fed via broadcast from accessibility service.
-        view.addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ ->
-            view.setPixelPosition(smoothX, smoothY)
+        view.setOnTouchListener { _, event ->
+            val speed = CursorPrefs.speed(this)
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    lastX = event.rawX
+                    lastY = event.rawY
+                    true
+                }
+                MotionEvent.ACTION_MOVE -> {
+                    val dx = (event.rawX - lastX) * speed
+                    val dy = (event.rawY - lastY) * speed
+                    applyDelta(dx, dy)
+                    lastX = event.rawX
+                    lastY = event.rawY
+                    true
+                }
+                else -> false
+            }
         }
+
+        windowManager?.addView(view, params)
     }
 
     private fun removeOverlay() {
-        cursorView?.let { windowManager?.removeView(it) }
+        try {
+            cursorView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {
+        }
         cursorView = null
     }
 
     fun applyDelta(dx: Float, dy: Float) {
-        val speed = CursorPrefs.speed(this)
-        posX = (posX + dx * speed).coerceIn(0f, resources.displayMetrics.widthPixels.toFloat())
-        posY = (posY + dy * speed).coerceIn(0f, resources.displayMetrics.heightPixels.toFloat())
+        val dm = resources.displayMetrics
+        posX = (posX + dx).coerceIn(0f, dm.widthPixels.toFloat())
+        posY = (posY + dy).coerceIn(0f, dm.heightPixels.toFloat())
         val smooth = CursorPrefs.smoothing(this)
-        smoothX = smoothX + (posX - smoothX) * (1f - smooth)
-        smoothY = smoothY + (posY - smoothY) * (1f - smooth)
+        smoothX += (posX - smoothX) * (1f - smooth)
+        smoothY += (posY - smoothY) * (1f - smooth)
         cursorView?.setPixelPosition(smoothX, smoothY)
     }
 
@@ -139,10 +157,7 @@ class CursorOverlayService : Service() {
     }
 
     companion object {
+        @Volatile
         var instance: CursorOverlayService? = null
-            private set
     }
-
-
-
 }
