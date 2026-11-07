@@ -36,7 +36,17 @@
             android:textColor="#64D2FF"
             android:textSize="13sp" />
 
-        <!-- Preview -->
+        <TextView
+            android:id="@+id/howToText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:padding="12dp"
+            android:background="#1C1C1E"
+            android:textColor="#E5E5EA"
+            android:textSize="13sp"
+            android:lineSpacingExtra="2dp" />
+
         <FrameLayout
             android:id="@+id/previewArea"
             android:layout_width="match_parent"
@@ -54,12 +64,11 @@
                 android:layout_height="wrap_content"
                 android:layout_gravity="bottom|center_horizontal"
                 android:layout_margin="8dp"
-                android:text="Drag here to preview"
+                android:text="Drag here to preview movement"
                 android:textColor="#8E8E93"
                 android:textSize="12sp" />
         </FrameLayout>
 
-        <!-- Controls -->
         <TextView android:id="@+id/scaleValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textColor="#FFF" android:text="Scale" />
         <SeekBar android:id="@+id/seekScale" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="400" android:min="25" />
 
@@ -78,26 +87,18 @@
         <Button android:id="@+id/btnPickPng" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:text="Choose custom PNG cursor" />
         <Button android:id="@+id/btnResetPng" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Reset to default arrow" />
 
-        <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="Grant overlay permission" />
-        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Accessibility settings (optional)" />
+        <Button android:id="@+id/btnAccessibility" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="1. Enable Accessibility (required to move)" />
+        <Button android:id="@+id/btnOverlayPermission" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="2. Grant overlay permission (fallback)" />
 
         <LinearLayout
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="12dp"
+            android:layout_marginBottom="32dp"
             android:orientation="horizontal">
 
             <Button android:id="@+id/btnStart" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:text="Start cursor" />
-            <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Stop" />
+            <Button android:id="@+id/btnStop" android:layout_width="0dp" android:layout_height="wrap_content" android:layout_weight="1" android:layout_marginStart="8dp" android:text="Stop overlay" />
         </LinearLayout>
-
-        <TextView
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="16dp"
-            android:layout_marginBottom="32dp"
-            android:text="Tip: For Minecraft Java on Android (MojoLauncher), embed CursorView in the game surface or point Mojo at this overlay. System-wide clicks still depend on the host app reading pointer position."
-            android:textColor="#8E8E93"
-            android:textSize="12sp" />
     </LinearLayout>
 </ScrollView>
