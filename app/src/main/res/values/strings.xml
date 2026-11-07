@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Custom Cursor</string>
+    <string name="accessibility_description">Draws a customizable virtual mouse cursor over the screen (Mojo-style). Used for PNG cursors, scale, speed and hotspot.</string>
+    <string name="notification_title">Custom Cursor active</string>
+    <string name="notification_text">Virtual cursor overlay is running</string>
+    <string name="channel_name">Cursor service</string>
+</resources>
