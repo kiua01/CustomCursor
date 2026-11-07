@@ -40,7 +40,7 @@ class MainActivity : AppCompatActivity() {
             notifyRunning()
             Toast.makeText(this, "Cursor PNG applied", Toast.LENGTH_SHORT).show()
         } catch (e: Exception) {
-            Toast.makeText(this, "Failed to load PNG: ${e.message}", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Failed: ${e.message}", Toast.LENGTH_LONG).show()
         }
     }
 
@@ -60,14 +60,21 @@ class MainActivity : AppCompatActivity() {
         preview.loadFromPrefs()
         preview.setNormalizedPosition(0.5f, 0.5f)
 
+        // Force Mojo default once if user still on old trackpad default storage
+        if (!CursorPrefs.prefs(this).contains(CursorPrefs.KEY_MODE)) {
+            CursorPrefs.setMode(this, CursorPrefs.MODE_MOUSE)
+        }
+
         howTo.text = """
-            1) Enable Accessibility for “Custom Cursor”
-            2) Default mode = TRACKPAD (recommended)
-               · Drag the pad → move cursor
-               · Tap the pad → click
-               · Blue ▶ button → pause controls (free screen)
-            3) Physical mouse works on Android 13+
-            4) Pick any PNG for the cursor look
+            Mojo-style (no trackpad needed):
+            1) Enable Accessibility → Custom Cursor
+            2) Plug mouse / use Bluetooth mouse
+            3) Move mouse → custom cursor follows
+            4) Left click → clicks in apps under the cursor
+            Screen stays free (cursor layer does not block touch).
+            
+            Android 13+ required for best mouse tracking.
+            Optional: Finger mode if you have no mouse.
         """.trimIndent()
 
         setupSeek(R.id.seekScale, (CursorPrefs.scale(this) * 100).toInt().coerceIn(25, 400)) { p ->
@@ -106,15 +113,19 @@ class MainActivity : AppCompatActivity() {
         smoothValue.text = "Smoothing: %.0f%%".format(CursorPrefs.smoothing(this) * 100)
 
         refreshModeLabel()
-        findViewById<Button>(R.id.btnModeTrackpad).setOnClickListener { setMode(CursorPrefs.MODE_TRACKPAD) }
-        findViewById<Button>(R.id.btnModeFullscreen).setOnClickListener { setMode(CursorPrefs.MODE_FULLSCREEN) }
-        findViewById<Button>(R.id.btnModeMouse).setOnClickListener { setMode(CursorPrefs.MODE_MOUSE) }
+        findViewById<Button>(R.id.btnModeTrackpad).setOnClickListener { setMode(CursorPrefs.MODE_MOUSE) }
+        findViewById<Button>(R.id.btnModeFullscreen).setOnClickListener { setMode(CursorPrefs.MODE_FINGER) }
+        findViewById<Button>(R.id.btnModeMouse).setOnClickListener { setMode(CursorPrefs.MODE_TRACKPAD) }
+
+        // Fix button labels via text (layout still has old ids)
+        findViewById<Button>(R.id.btnModeTrackpad).text = "Mouse (Mojo)"
+        findViewById<Button>(R.id.btnModeFullscreen).text = "Finger"
+        findViewById<Button>(R.id.btnModeMouse).text = "Trackpad"
 
         findViewById<Button>(R.id.btnPickPng).setOnClickListener { pickPng.launch("image/*") }
         findViewById<Button>(R.id.btnResetPng).setOnClickListener {
             CursorPrefs.setPngPath(this, null)
             preview.loadFromPrefs(); notifyRunning()
-            Toast.makeText(this, "Default cursor restored", Toast.LENGTH_SHORT).show()
         }
         findViewById<Button>(R.id.btnOverlayPermission).setOnClickListener {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this)) {
@@ -123,7 +134,6 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnAccessibility).setOnClickListener {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
-            Toast.makeText(this, "Enable “Custom Cursor”", Toast.LENGTH_LONG).show()
         }
         findViewById<Button>(R.id.btnStart).setOnClickListener { startCursor() }
         findViewById<Button>(R.id.btnStop).setOnClickListener { stopCursor() }
@@ -151,17 +161,17 @@ class MainActivity : AppCompatActivity() {
         CursorPrefs.setMode(this, mode)
         refreshModeLabel()
         notifyRunning()
-        Toast.makeText(this, "Mode: ${modeName(mode)}", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, modeName(mode), Toast.LENGTH_SHORT).show()
     }
 
     private fun modeName(mode: Int) = when (mode) {
-        CursorPrefs.MODE_FULLSCREEN -> "Fullscreen drag"
-        CursorPrefs.MODE_MOUSE -> "Mouse only"
-        else -> "Trackpad"
+        CursorPrefs.MODE_FINGER -> "Finger (absolute)"
+        CursorPrefs.MODE_TRACKPAD -> "Trackpad"
+        else -> "Mouse (Mojo style)"
     }
 
     private fun refreshModeLabel() {
-        modeValue.text = "Control mode: ${modeName(CursorPrefs.mode(this))}"
+        modeValue.text = "Mode: ${modeName(CursorPrefs.mode(this))}"
     }
 
     private fun setupSeek(id: Int, initial: Int, onChange: (Int) -> Unit) {
@@ -177,22 +187,16 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCursor() {
+        // Always prefer Mojo mouse mode when starting
+        if (!CursorPrefs.prefs(this).contains(CursorPrefs.KEY_MODE)) {
+            CursorPrefs.setMode(this, CursorPrefs.MODE_MOUSE)
+        }
         if (!CursorAccessibilityService.isEnabled(this)) {
-            Toast.makeText(this, "Enable Accessibility first", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Enable Accessibility → Custom Cursor", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         } else {
             CursorAccessibilityService.instance?.reloadPrefs()
-            Toast.makeText(this, "Cursor active — use trackpad", Toast.LENGTH_SHORT).show()
-        }
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M && !Settings.canDrawOverlays(this) &&
-            !CursorAccessibilityService.isEnabled(this)
-        ) {
-            startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION, Uri.parse("package:$packageName")))
-        } else if (!CursorAccessibilityService.isEnabled(this)) {
-            CursorPrefs.setEnabled(this, true)
-            val intent = Intent(this, CursorOverlayService::class.java)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) startForegroundService(intent)
-            else startService(intent)
+            Toast.makeText(this, "Mojo-style cursor active — use your mouse", Toast.LENGTH_LONG).show()
         }
         refreshStatus()
     }
@@ -200,20 +204,19 @@ class MainActivity : AppCompatActivity() {
     private fun stopCursor() {
         CursorPrefs.setEnabled(this, false)
         stopService(Intent(this, CursorOverlayService::class.java))
-        Toast.makeText(this, "Overlay stopped. Disable Accessibility to fully stop.", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Disable Accessibility to fully stop the cursor", Toast.LENGTH_LONG).show()
         refreshStatus()
     }
 
     private fun notifyRunning() {
         CursorAccessibilityService.instance?.reloadPrefs()
-        if (CursorPrefs.isEnabled(this)) startService(Intent(this, CursorOverlayService::class.java))
     }
 
     private fun refreshStatus() {
         val a11y = CursorAccessibilityService.isEnabled(this)
         statusText.text = buildString {
             append(if (a11y) "● Accessibility ON" else "○ Accessibility OFF")
-            append("  ·  Mode: ${modeName(CursorPrefs.mode(this@MainActivity))}")
+            append("  ·  ${modeName(CursorPrefs.mode(this@MainActivity))}")
             append("  ·  PNG: ")
             append(if (CursorPrefs.pngPath(this@MainActivity) != null) "custom" else "default")
         }
