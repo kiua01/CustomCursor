@@ -16,12 +16,14 @@ object CursorPrefs {
     const val KEY_HOTSPOT_Y = "hotspot_y"
     const val KEY_PNG_PATH = "png_path"
     const val KEY_SMOOTHING = "smoothing"
-    /** 0 = trackpad (best), 1 = fullscreen drag, 2 = mouse-only */
     const val KEY_MODE = "control_mode"
 
-    const val MODE_TRACKPAD = 0
-    const val MODE_FULLSCREEN = 1
-    const val MODE_MOUSE = 2
+    /** Mojo-like: physical mouse moves + clicks. Screen not blocked. */
+    const val MODE_MOUSE = 0
+    /** Finger position = cursor (no trackpad widget). */
+    const val MODE_FINGER = 1
+    /** Relative drag on a floating pad. */
+    const val MODE_TRACKPAD = 2
 
     fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -35,7 +37,7 @@ object CursorPrefs {
     fun sizePx(ctx: Context) = prefs(ctx).getInt(KEY_SIZE_PX, 48)
     fun setSizePx(ctx: Context, v: Int) = prefs(ctx).edit { putInt(KEY_SIZE_PX, v.coerceIn(16, 256)) }
 
-    fun speed(ctx: Context) = prefs(ctx).getFloat(KEY_SPEED, 1.25f)
+    fun speed(ctx: Context) = prefs(ctx).getFloat(KEY_SPEED, 1.0f)
     fun setSpeed(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_SPEED, v.coerceIn(0.1f, 5f)) }
 
     fun opacity(ctx: Context) = prefs(ctx).getFloat(KEY_OPACITY, 1.0f)
@@ -51,9 +53,9 @@ object CursorPrefs {
     fun pngPath(ctx: Context): String? = prefs(ctx).getString(KEY_PNG_PATH, null)
     fun setPngPath(ctx: Context, path: String?) = prefs(ctx).edit { putString(KEY_PNG_PATH, path) }
 
-    fun smoothing(ctx: Context) = prefs(ctx).getFloat(KEY_SMOOTHING, 0.25f)
+    fun smoothing(ctx: Context) = prefs(ctx).getFloat(KEY_SMOOTHING, 0.15f)
     fun setSmoothing(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_SMOOTHING, v.coerceIn(0f, 0.95f)) }
 
-    fun mode(ctx: Context) = prefs(ctx).getInt(KEY_MODE, MODE_TRACKPAD)
+    fun mode(ctx: Context) = prefs(ctx).getInt(KEY_MODE, MODE_MOUSE)
     fun setMode(ctx: Context, mode: Int) = prefs(ctx).edit { putInt(KEY_MODE, mode.coerceIn(0, 2)) }
 }
