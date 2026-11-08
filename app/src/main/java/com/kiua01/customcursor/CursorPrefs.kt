@@ -37,8 +37,8 @@ object CursorPrefs {
     fun sizePx(ctx: Context) = prefs(ctx).getInt(KEY_SIZE_PX, 48)
     fun setSizePx(ctx: Context, v: Int) = prefs(ctx).edit { putInt(KEY_SIZE_PX, v.coerceIn(16, 256)) }
 
-    fun speed(ctx: Context) = prefs(ctx).getFloat(KEY_SPEED, 1.0f)
-    fun setSpeed(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_SPEED, v.coerceIn(0.1f, 5f)) }
+    fun speed(ctx: Context) = prefs(ctx).getFloat(KEY_SPEED, 2.5f)
+    fun setSpeed(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_SPEED, v.coerceIn(0.1f, 12f)) }
 
     fun opacity(ctx: Context) = prefs(ctx).getFloat(KEY_OPACITY, 1.0f)
     fun setOpacity(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_OPACITY, v.coerceIn(0.1f, 1f)) }
@@ -53,7 +53,7 @@ object CursorPrefs {
     fun pngPath(ctx: Context): String? = prefs(ctx).getString(KEY_PNG_PATH, null)
     fun setPngPath(ctx: Context, path: String?) = prefs(ctx).edit { putString(KEY_PNG_PATH, path) }
 
-    fun smoothing(ctx: Context) = prefs(ctx).getFloat(KEY_SMOOTHING, 0.15f)
+    fun smoothing(ctx: Context) = prefs(ctx).getFloat(KEY_SMOOTHING, 0.05f)
     fun setSmoothing(ctx: Context, v: Float) = prefs(ctx).edit { putFloat(KEY_SMOOTHING, v.coerceIn(0f, 0.95f)) }
 
     fun mode(ctx: Context) = prefs(ctx).getInt(KEY_MODE, MODE_MOUSE)
