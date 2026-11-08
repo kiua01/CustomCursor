@@ -83,7 +83,7 @@
         <SeekBar android:id="@+id/seekSize" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="256" android:min="16" />
 
         <TextView android:id="@+id/speedValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="#FFF" android:text="Speed" />
-        <SeekBar android:id="@+id/seekSpeed" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="500" android:min="10" />
+        <SeekBar android:id="@+id/seekSpeed" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="1200" android:min="10" />
 
         <TextView android:id="@+id/opacityValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="8dp" android:textColor="#FFF" android:text="Opacity" />
         <SeekBar android:id="@+id/seekOpacity" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="100" android:min="10" />
