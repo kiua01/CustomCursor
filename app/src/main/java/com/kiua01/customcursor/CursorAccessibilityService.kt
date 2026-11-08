@@ -48,6 +48,9 @@ class CursorAccessibilityService : AccessibilityService() {
     private var movedWhileDown = false
     private var controlsEnabled = true
     private var mouseButtonDown = false
+    private var lastMouseRawX = Float.NaN
+    private var lastMouseRawY = Float.NaN
+    private var hasLastMouse = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
 
@@ -120,29 +123,37 @@ class CursorAccessibilityService : AccessibilityService() {
             return
         }
 
+        val speed = CursorPrefs.speed(this)
         when (event.actionMasked) {
-            MotionEvent.ACTION_HOVER_ENTER,
+            MotionEvent.ACTION_HOVER_ENTER -> {
+                // Seed reference without jumping
+                lastMouseRawX = event.rawX
+                lastMouseRawY = event.rawY
+                hasLastMouse = true
+            }
             MotionEvent.ACTION_HOVER_MOVE,
-            MotionEvent.ACTION_HOVER_EXIT,
             MotionEvent.ACTION_MOVE -> {
-                if (event.isFromSource(InputDevice.SOURCE_MOUSE_RELATIVE)) {
-                    // Relative mouse: use axis values as deltas when available
-                    val dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
-                    val dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
-                    if (dx != 0f || dy != 0f) {
-                        val speed = CursorPrefs.speed(this)
-                        applyDelta(dx * speed, dy * speed)
-                    } else {
-                        applyAbsolute(event.rawX, event.rawY)
+                // Mojo-style sensitivity: amplify mouse deltas (not locked 1:1 to system pointer)
+                var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
+                var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
+                if (dx == 0f && dy == 0f) {
+                    if (hasLastMouse) {
+                        dx = event.rawX - lastMouseRawX
+                        dy = event.rawY - lastMouseRawY
                     }
-                } else {
-                    applyAbsolute(event.rawX, event.rawY)
+                }
+                lastMouseRawX = event.rawX
+                lastMouseRawY = event.rawY
+                hasLastMouse = true
+                if (dx != 0f || dy != 0f) {
+                    applyDelta(dx * speed, dy * speed)
                 }
             }
+            MotionEvent.ACTION_HOVER_EXIT -> {
+                hasLastMouse = false
+            }
             MotionEvent.ACTION_BUTTON_PRESS -> {
-                applyAbsolute(event.rawX, event.rawY)
                 mouseButtonDown = true
-                // Primary button → left click
                 if (event.actionButton == MotionEvent.BUTTON_PRIMARY ||
                     event.buttonState and MotionEvent.BUTTON_PRIMARY != 0
                 ) {
@@ -153,8 +164,9 @@ class CursorAccessibilityService : AccessibilityService() {
                 mouseButtonDown = false
             }
             MotionEvent.ACTION_DOWN -> {
-                // Some devices send DOWN instead of BUTTON_PRESS for mouse
-                applyAbsolute(event.rawX, event.rawY)
+                lastMouseRawX = event.rawX
+                lastMouseRawY = event.rawY
+                hasLastMouse = true
                 if (event.buttonState and MotionEvent.BUTTON_PRIMARY != 0) {
                     injectClick(posX, posY)
                 }
