@@ -91,7 +91,7 @@ class MainActivity : AppCompatActivity() {
         }
         sizeValue.text = "Size: ${CursorPrefs.sizePx(this)}px"
 
-        setupSeek(R.id.seekSpeed, (CursorPrefs.speed(this) * 100).toInt().coerceIn(10, 500)) { p ->
+        setupSeek(R.id.seekSpeed, (CursorPrefs.speed(this) * 100).toInt().coerceIn(10, 1200)) { p ->
             CursorPrefs.setSpeed(this, p / 100f)
             speedValue.text = "Speed: %.2f".format(p / 100f)
             notifyRunning()
