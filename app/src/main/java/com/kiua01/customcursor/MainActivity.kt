@@ -1,6 +1,7 @@
 package com.kiua01.customcursor
 
 import android.content.Intent
+import android.graphics.drawable.GradientDrawable
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -8,6 +9,7 @@ import android.provider.Settings
 import android.view.MotionEvent
 import android.view.View
 import android.widget.Button
+import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
@@ -25,6 +27,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var opacityValue: TextView
     private lateinit var smoothValue: TextView
     private lateinit var modeValue: TextView
+    private lateinit var trackpadPosValue: TextView
     private lateinit var preview: CursorView
     private lateinit var howTo: TextView
 
@@ -55,26 +58,22 @@ class MainActivity : AppCompatActivity() {
         opacityValue = findViewById(R.id.opacityValue)
         smoothValue = findViewById(R.id.smoothValue)
         modeValue = findViewById(R.id.modeValue)
+        trackpadPosValue = findViewById(R.id.trackpadPosValue)
         preview = findViewById(R.id.previewCursor)
         howTo = findViewById(R.id.howToText)
         preview.loadFromPrefs()
         preview.setNormalizedPosition(0.5f, 0.5f)
 
-        // Force Mojo default once if user still on old trackpad default storage
-        if (!CursorPrefs.prefs(this).contains(CursorPrefs.KEY_MODE)) {
-            CursorPrefs.setMode(this, CursorPrefs.MODE_MOUSE)
-        }
-
         howTo.text = """
-            Mojo-style (no trackpad needed):
-            1) Enable Accessibility → Custom Cursor
-            2) Plug mouse / use Bluetooth mouse
-            3) Move mouse → custom cursor follows
-            4) Left click → clicks in apps under the cursor
-            Screen stays free (cursor layer does not block touch).
+            Trackpad tips:
+            · Drag on pad = move cursor · Tap pad = click
+            · Drag from the TOP EDGE of the pad = reposition trackpad (saved)
             
-            Android 13+ required for best mouse tracking.
-            Optional: Finger mode if you have no mouse.
+            X button (small red):
+            · Hold X = attack / dig / continuous click (like Mojo left-hold)
+            · Drag X = move the button (saved)
+            
+            Cursor color: pick a preset below (tints the default arrow).
         """.trimIndent()
 
         setupSeek(R.id.seekScale, (CursorPrefs.scale(this) * 100).toInt().coerceIn(25, 400)) { p ->
@@ -112,15 +111,79 @@ class MainActivity : AppCompatActivity() {
         }
         smoothValue.text = "Smoothing: %.0f%%".format(CursorPrefs.smoothing(this) * 100)
 
-        refreshModeLabel()
-        findViewById<Button>(R.id.btnModeTrackpad).setOnClickListener { setMode(CursorPrefs.MODE_MOUSE) }
-        findViewById<Button>(R.id.btnModeFullscreen).setOnClickListener { setMode(CursorPrefs.MODE_FINGER) }
-        findViewById<Button>(R.id.btnModeMouse).setOnClickListener { setMode(CursorPrefs.MODE_TRACKPAD) }
+        // Trackpad position from settings (offset from bottom-right)
+        val maxOff = 600
+        setupSeek(R.id.seekTrackpadX, CursorPrefs.trackpadX(this).coerceIn(0, maxOff)) { p ->
+            CursorPrefs.setTrackpadPos(this, p, CursorPrefs.trackpadY(this))
+            refreshTrackpadLabel()
+            notifyRunning()
+        }
+        setupSeek(R.id.seekTrackpadY, CursorPrefs.trackpadY(this).coerceIn(0, maxOff)) { p ->
+            CursorPrefs.setTrackpadPos(this, CursorPrefs.trackpadX(this), p)
+            refreshTrackpadLabel()
+            notifyRunning()
+        }
+        refreshTrackpadLabel()
 
-        // Fix button labels via text (layout still has old ids)
-        findViewById<Button>(R.id.btnModeTrackpad).text = "Mouse (Mojo)"
-        findViewById<Button>(R.id.btnModeFullscreen).text = "Finger"
-        findViewById<Button>(R.id.btnModeMouse).text = "Trackpad"
+        refreshModeLabel()
+        findViewById<Button>(R.id.btnModeTrackpad).apply {
+            text = "Trackpad"
+            setOnClickListener { setMode(CursorPrefs.MODE_TRACKPAD) }
+        }
+        findViewById<Button>(R.id.btnModeFullscreen).apply {
+            text = "Finger"
+            setOnClickListener { setMode(CursorPrefs.MODE_FINGER) }
+        }
+        findViewById<Button>(R.id.btnModeMouse).apply {
+            text = "Mouse"
+            setOnClickListener { setMode(CursorPrefs.MODE_MOUSE) }
+        }
+
+        // Color presets
+        val colors = listOf(
+            CursorPrefs.COLOR_WHITE to "White",
+            CursorPrefs.COLOR_RED to "Red",
+            CursorPrefs.COLOR_GREEN to "Green",
+            CursorPrefs.COLOR_BLUE to "Blue",
+            CursorPrefs.COLOR_YELLOW to "Yellow",
+            CursorPrefs.COLOR_CYAN to "Cyan",
+            CursorPrefs.COLOR_MAGENTA to "Pink",
+            CursorPrefs.COLOR_ORANGE to "Orange"
+        )
+        val row = findViewById<LinearLayout>(R.id.colorRow)
+        row.removeAllViews()
+        colors.forEach { (color, name) ->
+            val b = Button(this).apply {
+                text = name
+                textSize = 10f
+                setTextColor(0xFF000000.toInt())
+                background = GradientDrawable().apply {
+                    shape = GradientDrawable.RECTANGLE
+                    cornerRadius = 12f
+                    setColor(color)
+                }
+                setOnClickListener {
+                    CursorPrefs.setCursorColor(this@MainActivity, color)
+                    preview.loadFromPrefs()
+                    notifyRunning()
+                    Toast.makeText(this@MainActivity, "Cursor: $name", Toast.LENGTH_SHORT).show()
+                }
+                layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1f).apply {
+                    marginEnd = 4
+                }
+            }
+            row.addView(b)
+        }
+
+        findViewById<Button>(R.id.btnAttackToggle).setOnClickListener {
+            val next = !CursorPrefs.attackEnabled(this)
+            CursorPrefs.setAttackEnabled(this, next)
+            findViewById<Button>(R.id.btnAttackToggle).text =
+                if (next) "X attack button: ON" else "X attack button: OFF"
+            notifyRunning()
+        }
+        findViewById<Button>(R.id.btnAttackToggle).text =
+            if (CursorPrefs.attackEnabled(this)) "X attack button: ON" else "X attack button: OFF"
 
         findViewById<Button>(R.id.btnPickPng).setOnClickListener { pickPng.launch("image/*") }
         findViewById<Button>(R.id.btnResetPng).setOnClickListener {
@@ -141,7 +204,10 @@ class MainActivity : AppCompatActivity() {
         findViewById<View>(R.id.previewArea).setOnTouchListener { v, event ->
             when (event.actionMasked) {
                 MotionEvent.ACTION_DOWN, MotionEvent.ACTION_MOVE -> {
-                    preview.setPixelPosition(event.x / v.width * preview.width, event.y / v.height * preview.height)
+                    preview.setPixelPosition(
+                        event.x / v.width * preview.width,
+                        event.y / v.height * preview.height
+                    )
                     true
                 }
                 else -> false
@@ -154,6 +220,7 @@ class MainActivity : AppCompatActivity() {
         super.onResume()
         refreshStatus()
         preview.loadFromPrefs()
+        refreshTrackpadLabel()
         notifyRunning()
     }
 
@@ -165,13 +232,18 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun modeName(mode: Int) = when (mode) {
-        CursorPrefs.MODE_FINGER -> "Finger (absolute)"
-        CursorPrefs.MODE_TRACKPAD -> "Trackpad"
-        else -> "Mouse (Mojo style)"
+        CursorPrefs.MODE_FINGER -> "Finger"
+        CursorPrefs.MODE_MOUSE -> "Mouse"
+        else -> "Trackpad"
     }
 
     private fun refreshModeLabel() {
         modeValue.text = "Mode: ${modeName(CursorPrefs.mode(this))}"
+    }
+
+    private fun refreshTrackpadLabel() {
+        trackpadPosValue.text =
+            "Trackpad position (from bottom-right): X=${CursorPrefs.trackpadX(this)}  Y=${CursorPrefs.trackpadY(this)}"
     }
 
     private fun setupSeek(id: Int, initial: Int, onChange: (Int) -> Unit) {
@@ -187,16 +259,12 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startCursor() {
-        // Always prefer Mojo mouse mode when starting
-        if (!CursorPrefs.prefs(this).contains(CursorPrefs.KEY_MODE)) {
-            CursorPrefs.setMode(this, CursorPrefs.MODE_MOUSE)
-        }
         if (!CursorAccessibilityService.isEnabled(this)) {
             Toast.makeText(this, "Enable Accessibility → Custom Cursor", Toast.LENGTH_LONG).show()
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
         } else {
             CursorAccessibilityService.instance?.reloadPrefs()
-            Toast.makeText(this, "Mojo-style cursor active — use your mouse", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Cursor refreshed", Toast.LENGTH_SHORT).show()
         }
         refreshStatus()
     }
@@ -204,7 +272,7 @@ class MainActivity : AppCompatActivity() {
     private fun stopCursor() {
         CursorPrefs.setEnabled(this, false)
         stopService(Intent(this, CursorOverlayService::class.java))
-        Toast.makeText(this, "Disable Accessibility to fully stop the cursor", Toast.LENGTH_LONG).show()
+        Toast.makeText(this, "Disable Accessibility to fully stop", Toast.LENGTH_LONG).show()
         refreshStatus()
     }
 
@@ -217,8 +285,8 @@ class MainActivity : AppCompatActivity() {
         statusText.text = buildString {
             append(if (a11y) "● Accessibility ON" else "○ Accessibility OFF")
             append("  ·  ${modeName(CursorPrefs.mode(this@MainActivity))}")
-            append("  ·  PNG: ")
-            append(if (CursorPrefs.pngPath(this@MainActivity) != null) "custom" else "default")
+            append("  ·  X: ")
+            append(if (CursorPrefs.attackEnabled(this@MainActivity)) "ON" else "OFF")
         }
     }
 }
