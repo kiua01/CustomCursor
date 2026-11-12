@@ -90,6 +90,7 @@
         <SeekBar android:id="@+id/seekTrackpadY" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="600" android:min="0" />
 
         <Button android:id="@+id/btnAttackToggle" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp" android:text="X attack button: ON" />
+        <Button android:id="@+id/btnPinControls" android:layout_width="match_parent" android:layout_height="wrap_content" android:text="Pin controls: OFF (can drag)" />
 
         <TextView android:id="@+id/scaleValue" android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="16dp" android:textColor="#FFF" android:text="Scale" />
         <SeekBar android:id="@+id/seekScale" android:layout_width="match_parent" android:layout_height="wrap_content" android:max="400" android:min="25" />
