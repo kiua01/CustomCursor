@@ -72,6 +72,7 @@ class MainActivity : AppCompatActivity() {
             X button (small red):
             · Hold X = attack / dig / continuous click (like Mojo left-hold)
             · Drag X = move the button (saved)
+            · Pin controls = lock trackpad & X so they never move while using them
             
             Cursor color: pick a preset below (tints the default arrow).
         """.trimIndent()
@@ -148,7 +149,8 @@ class MainActivity : AppCompatActivity() {
             CursorPrefs.COLOR_YELLOW to "Yellow",
             CursorPrefs.COLOR_CYAN to "Cyan",
             CursorPrefs.COLOR_MAGENTA to "Pink",
-            CursorPrefs.COLOR_ORANGE to "Orange"
+            CursorPrefs.COLOR_ORANGE to "Orange",
+            CursorPrefs.COLOR_BLACK to "Black"
         )
         val row = findViewById<LinearLayout>(R.id.colorRow)
         row.removeAllViews()
@@ -184,6 +186,23 @@ class MainActivity : AppCompatActivity() {
         }
         findViewById<Button>(R.id.btnAttackToggle).text =
             if (CursorPrefs.attackEnabled(this)) "X attack button: ON" else "X attack button: OFF"
+
+        findViewById<Button>(R.id.btnPinControls).setOnClickListener {
+            val next = !CursorPrefs.controlsPinned(this)
+            CursorPrefs.setControlsPinned(this, next)
+            findViewById<Button>(R.id.btnPinControls).text =
+                if (next) "Pin controls: ON (won’t move)" else "Pin controls: OFF (can drag)"
+            notifyRunning()
+            Toast.makeText(
+                this,
+                if (next) "Trackpad & X pinned in place" else "You can drag trackpad & X again",
+                Toast.LENGTH_SHORT
+            ).show()
+        }
+        findViewById<Button>(R.id.btnPinControls).text =
+            if (CursorPrefs.controlsPinned(this)) "Pin controls: ON (won’t move)"
+            else "Pin controls: OFF (can drag)"
+
 
         findViewById<Button>(R.id.btnPickPng).setOnClickListener { pickPng.launch("image/*") }
         findViewById<Button>(R.id.btnResetPng).setOnClickListener {
