@@ -316,7 +316,10 @@ class CursorAccessibilityService : AccessibilityService() {
             background = roundBg(0x99000000.toInt(), dp(16).toFloat())
             addView(
                 TextView(this@CursorAccessibilityService).apply {
-                    text = "TRACKPAD\ndrag · tap click\nhold edge to move pad"
+                    text = if (CursorPrefs.controlsPinned(this@CursorAccessibilityService))
+                        "TRACKPAD\ndrag · tap click\n(pinned)"
+                    else
+                        "TRACKPAD\ndrag · tap click\nhold edge to move pad"
                     setTextColor(Color.WHITE)
                     textSize = 11f
                     gravity = android.view.Gravity.CENTER
@@ -346,7 +349,8 @@ class CursorAccessibilityService : AccessibilityService() {
                         val totalDx = e.rawX - downRawX
                         val totalDy = e.rawY - downRawY
                         // Hold near top strip and drag → reposition trackpad
-                        if (!padMoving && e.y < dp(28) &&
+                        if (!CursorPrefs.controlsPinned(this@CursorAccessibilityService) &&
+                            !padMoving && e.y < dp(28) &&
                             (kotlin.math.abs(totalDx) > 12f || kotlin.math.abs(totalDy) > 12f)
                         ) {
                             padMoving = true
@@ -451,7 +455,9 @@ class CursorAccessibilityService : AccessibilityService() {
                     MotionEvent.ACTION_MOVE -> {
                         val tdx = e.rawX - downRawX
                         val tdy = e.rawY - downRawY
-                        if (kotlin.math.abs(tdx) > 14f || kotlin.math.abs(tdy) > 14f) {
+                        if (!CursorPrefs.controlsPinned(this@CursorAccessibilityService) &&
+                            (kotlin.math.abs(tdx) > 14f || kotlin.math.abs(tdy) > 14f)
+                        ) {
                             if (attacking) stopAttack()
                             movingBtn = true
                             attackParams?.let { lp ->
