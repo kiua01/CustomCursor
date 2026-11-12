@@ -21,12 +21,9 @@ import android.widget.TextView
 import android.widget.Toast
 
 /**
- * Mojo-style system cursor:
- * - Default MODE_MOUSE: screen is free, physical mouse moves the drawn cursor, clicks inject taps
- * - MODE_FINGER: finger position = cursor (no trackpad widget)
- * - MODE_TRACKPAD: optional floating pad
- *
- * Cursor layer is always FLAG_NOT_TOUCHABLE so it never blocks the UI under it.
+ * Mojo-style cursor + trackpad + tiny Attack (X) button.
+ * Trackpad position is configurable and draggable.
+ * Attack button: hold = continuous left-click (attack/break/drag like Mojo).
  */
 class CursorAccessibilityService : AccessibilityService() {
 
@@ -35,6 +32,8 @@ class CursorAccessibilityService : AccessibilityService() {
     private var cursorParams: WindowManager.LayoutParams? = null
     private var controlView: View? = null
     private var controlParams: WindowManager.LayoutParams? = null
+    private var attackView: View? = null
+    private var attackParams: WindowManager.LayoutParams? = null
     private var toggleView: View? = null
     private var toggleParams: WindowManager.LayoutParams? = null
 
@@ -47,12 +46,19 @@ class CursorAccessibilityService : AccessibilityService() {
     private var touchDownTime = 0L
     private var movedWhileDown = false
     private var controlsEnabled = true
-    private var mouseButtonDown = false
     private var lastMouseRawX = Float.NaN
     private var lastMouseRawY = Float.NaN
     private var hasLastMouse = false
+    private var attacking = false
 
     private val mainHandler = Handler(Looper.getMainLooper())
+    private val attackRunnable = object : Runnable {
+        override fun run() {
+            if (!attacking) return
+            injectClick(posX, posY, durationMs = 40)
+            mainHandler.postDelayed(this, 90)
+        }
+    }
 
     override fun onServiceConnected() {
         super.onServiceConnected()
@@ -66,7 +72,6 @@ class CursorAccessibilityService : AccessibilityService() {
             AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
             AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            // Critical for Mojo-like mouse tracking system-wide
             info.setMotionEventSources(
                 InputDevice.SOURCE_MOUSE or
                     InputDevice.SOURCE_MOUSE_RELATIVE or
@@ -86,27 +91,21 @@ class CursorAccessibilityService : AccessibilityService() {
         attachCursorLayer()
         attachToggleButton()
         rebuildControlLayer()
+        rebuildAttackButton()
 
-        Toast.makeText(
-            this,
-            "Custom Cursor ON — move your mouse (Mojo style). Screen is free.",
-            Toast.LENGTH_LONG
-        ).show()
+        Toast.makeText(this, "Custom Cursor ON — trackpad + X attack ready", Toast.LENGTH_LONG).show()
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {}
     override fun onInterrupt() {}
 
     override fun onDestroy() {
+        stopAttack()
         removeAllLayers()
         instance = null
         super.onDestroy()
     }
 
-    /**
-     * Mojo-like path: every mouse move updates the virtual cursor.
-     * Button press → inject click at cursor (games/apps under it receive the tap).
-     */
     override fun onMotionEvent(event: MotionEvent) {
         if (!controlsEnabled) {
             super.onMotionEvent(event)
@@ -126,42 +125,30 @@ class CursorAccessibilityService : AccessibilityService() {
         val speed = CursorPrefs.speed(this)
         when (event.actionMasked) {
             MotionEvent.ACTION_HOVER_ENTER -> {
-                // Seed reference without jumping
                 lastMouseRawX = event.rawX
                 lastMouseRawY = event.rawY
                 hasLastMouse = true
             }
             MotionEvent.ACTION_HOVER_MOVE,
             MotionEvent.ACTION_MOVE -> {
-                // Mojo-style sensitivity: amplify mouse deltas (not locked 1:1 to system pointer)
                 var dx = event.getAxisValue(MotionEvent.AXIS_RELATIVE_X)
                 var dy = event.getAxisValue(MotionEvent.AXIS_RELATIVE_Y)
-                if (dx == 0f && dy == 0f) {
-                    if (hasLastMouse) {
-                        dx = event.rawX - lastMouseRawX
-                        dy = event.rawY - lastMouseRawY
-                    }
+                if (dx == 0f && dy == 0f && hasLastMouse) {
+                    dx = event.rawX - lastMouseRawX
+                    dy = event.rawY - lastMouseRawY
                 }
                 lastMouseRawX = event.rawX
                 lastMouseRawY = event.rawY
                 hasLastMouse = true
-                if (dx != 0f || dy != 0f) {
-                    applyDelta(dx * speed, dy * speed)
-                }
+                if (dx != 0f || dy != 0f) applyDelta(dx * speed, dy * speed)
             }
-            MotionEvent.ACTION_HOVER_EXIT -> {
-                hasLastMouse = false
-            }
+            MotionEvent.ACTION_HOVER_EXIT -> hasLastMouse = false
             MotionEvent.ACTION_BUTTON_PRESS -> {
-                mouseButtonDown = true
                 if (event.actionButton == MotionEvent.BUTTON_PRIMARY ||
                     event.buttonState and MotionEvent.BUTTON_PRIMARY != 0
                 ) {
                     injectClick(posX, posY)
                 }
-            }
-            MotionEvent.ACTION_BUTTON_RELEASE -> {
-                mouseButtonDown = false
             }
             MotionEvent.ACTION_DOWN -> {
                 lastMouseRawX = event.rawX
@@ -171,9 +158,6 @@ class CursorAccessibilityService : AccessibilityService() {
                     injectClick(posX, posY)
                 }
             }
-            MotionEvent.ACTION_UP -> {
-                mouseButtonDown = false
-            }
         }
         super.onMotionEvent(event)
     }
@@ -182,6 +166,7 @@ class CursorAccessibilityService : AccessibilityService() {
         mainHandler.post {
             cursorView?.loadFromPrefs()
             rebuildControlLayer()
+            rebuildAttackButton()
         }
     }
 
@@ -194,7 +179,6 @@ class CursorAccessibilityService : AccessibilityService() {
     }
 
     private fun attachCursorLayer() {
-        // Never touchable — pure draw layer, like Mojo GLFWCursorView
         cursorParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -234,10 +218,12 @@ class CursorAccessibilityService : AccessibilityService() {
             setOnClickListener {
                 controlsEnabled = !controlsEnabled
                 background = circleBg(if (controlsEnabled) 0xCC007AFF.toInt() else 0xCCFF3B30.toInt())
+                if (!controlsEnabled) stopAttack()
                 rebuildControlLayer()
+                rebuildAttackButton()
                 Toast.makeText(
                     this@CursorAccessibilityService,
-                    if (controlsEnabled) "Cursor tracking ON" else "Cursor tracking paused",
+                    if (controlsEnabled) "Controls ON" else "Controls paused",
                     Toast.LENGTH_SHORT
                 ).show()
             }
@@ -256,13 +242,10 @@ class CursorAccessibilityService : AccessibilityService() {
         when (CursorPrefs.mode(this)) {
             CursorPrefs.MODE_FINGER -> attachFingerLayer()
             CursorPrefs.MODE_TRACKPAD -> attachTrackpadLayer()
-            else -> {
-                // MODE_MOUSE: no control layer — screen fully free, mouse via onMotionEvent
-            }
+            else -> { /* mouse only */ }
         }
     }
 
-    /** Finger = absolute pointer (no trackpad box). */
     private fun attachFingerLayer() {
         controlParams = WindowManager.LayoutParams(
             WindowManager.LayoutParams.MATCH_PARENT,
@@ -286,22 +269,13 @@ class CursorAccessibilityService : AccessibilityService() {
                     MotionEvent.ACTION_MOVE -> {
                         if (kotlin.math.abs(e.rawX - lastTouchX) > 4f ||
                             kotlin.math.abs(e.rawY - lastTouchY) > 4f
-                        ) {
-                            movedWhileDown = true
-                        }
+                        ) movedWhileDown = true
                         applyAbsolute(e.rawX, e.rawY)
                         true
                     }
                     MotionEvent.ACTION_UP -> {
                         applyAbsolute(e.rawX, e.rawY)
-                        val dt = System.currentTimeMillis() - touchDownTime
-                        // Tap or release → click (Mojo-like click at pointer)
-                        if (!movedWhileDown || dt < 200) {
-                            injectClick(posX, posY)
-                        } else {
-                            // Drag end still clicks once (optional desktop feel)
-                            injectClick(posX, posY)
-                        }
+                        injectClick(posX, posY)
                         true
                     }
                     else -> false
@@ -318,6 +292,9 @@ class CursorAccessibilityService : AccessibilityService() {
     private fun attachTrackpadLayer() {
         val w = dp(180)
         val h = dp(120)
+        val padX = CursorPrefs.trackpadX(this)
+        val padY = CursorPrefs.trackpadY(this)
+
         controlParams = WindowManager.LayoutParams(
             w, h,
             WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
@@ -325,17 +302,23 @@ class CursorAccessibilityService : AccessibilityService() {
             PixelFormat.TRANSLUCENT
         ).apply {
             gravity = Gravity.BOTTOM or Gravity.END
-            x = dp(16)
-            y = dp(48)
+            x = padX
+            y = padY
         }
+
+        var padMoving = false
+        var padStartX = 0
+        var padStartY = 0
+        var downRawX = 0f
+        var downRawY = 0f
 
         val pad = FrameLayout(this).apply {
             background = roundBg(0x99000000.toInt(), dp(16).toFloat())
             addView(
                 TextView(this@CursorAccessibilityService).apply {
-                    text = "TRACKPAD"
+                    text = "TRACKPAD\ndrag · tap click\nhold edge to move pad"
                     setTextColor(Color.WHITE)
-                    textSize = 12f
+                    textSize = 11f
                     gravity = android.view.Gravity.CENTER
                 },
                 FrameLayout.LayoutParams(
@@ -343,17 +326,46 @@ class CursorAccessibilityService : AccessibilityService() {
                     FrameLayout.LayoutParams.MATCH_PARENT
                 )
             )
-            setOnTouchListener { _, e ->
+            setOnTouchListener { v, e ->
                 val speed = CursorPrefs.speed(this@CursorAccessibilityService)
                 when (e.actionMasked) {
                     MotionEvent.ACTION_DOWN -> {
                         lastTouchX = e.rawX
                         lastTouchY = e.rawY
+                        downRawX = e.rawX
+                        downRawY = e.rawY
                         touchDownTime = System.currentTimeMillis()
                         movedWhileDown = false
+                        padMoving = false
+                        padStartX = controlParams?.x ?: 0
+                        padStartY = controlParams?.y ?: 0
+                        // Long-press edge later; 2-finger or corner: if touch near top 24dp of pad → move mode after 400ms
                         true
                     }
                     MotionEvent.ACTION_MOVE -> {
+                        val totalDx = e.rawX - downRawX
+                        val totalDy = e.rawY - downRawY
+                        // Hold near top strip and drag → reposition trackpad
+                        if (!padMoving && e.y < dp(28) &&
+                            (kotlin.math.abs(totalDx) > 12f || kotlin.math.abs(totalDy) > 12f)
+                        ) {
+                            padMoving = true
+                        }
+                        if (padMoving) {
+                            // BOTTOM|END: increasing x moves left from end; increasing y moves up from bottom
+                            val nx = (padStartX - totalDx.toInt()).coerceAtLeast(0)
+                            val ny = (padStartY - totalDy.toInt()).coerceAtLeast(0)
+                            controlParams?.let { lp ->
+                                lp.x = nx
+                                lp.y = ny
+                                try {
+                                    windowManager?.updateViewLayout(v, lp)
+                                } catch (_: Exception) {
+                                }
+                            }
+                            return@setOnTouchListener true
+                        }
+
                         val dx = (e.rawX - lastTouchX) * speed
                         val dy = (e.rawY - lastTouchY) * speed
                         if (kotlin.math.abs(dx) > 0.5f || kotlin.math.abs(dy) > 0.5f) {
@@ -365,7 +377,16 @@ class CursorAccessibilityService : AccessibilityService() {
                         true
                     }
                     MotionEvent.ACTION_UP -> {
-                        if (!movedWhileDown && System.currentTimeMillis() - touchDownTime < 280) {
+                        if (padMoving) {
+                            controlParams?.let {
+                                CursorPrefs.setTrackpadPos(this@CursorAccessibilityService, it.x, it.y)
+                                Toast.makeText(
+                                    this@CursorAccessibilityService,
+                                    "Trackpad position saved",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else if (!movedWhileDown && System.currentTimeMillis() - touchDownTime < 280) {
                             injectClick(posX, posY)
                         }
                         true
@@ -379,6 +400,109 @@ class CursorAccessibilityService : AccessibilityService() {
             windowManager?.addView(pad, controlParams)
         } catch (_: Exception) {
         }
+    }
+
+    /** Tiny X button — hold for continuous attack / dig / drag (Mojo left-hold). */
+    private fun rebuildAttackButton() {
+        removeAttackButton()
+        if (!controlsEnabled || !CursorPrefs.attackEnabled(this)) return
+
+        val size = dp(36)
+        attackParams = WindowManager.LayoutParams(
+            size, size,
+            WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+            overlayFlags(touchable = true),
+            PixelFormat.TRANSLUCENT
+        ).apply {
+            gravity = Gravity.BOTTOM or Gravity.END
+            x = CursorPrefs.attackX(this@CursorAccessibilityService)
+            y = CursorPrefs.attackY(this@CursorAccessibilityService)
+        }
+
+        var movingBtn = false
+        var startX = 0
+        var startY = 0
+        var downRawX = 0f
+        var downRawY = 0f
+
+        val btn = TextView(this).apply {
+            text = "X"
+            textSize = 13f
+            setTextColor(Color.WHITE)
+            gravity = android.view.Gravity.CENTER
+            background = circleBg(0xCCFF3B30.toInt())
+            setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    MotionEvent.ACTION_DOWN -> {
+                        downRawX = e.rawX
+                        downRawY = e.rawY
+                        startX = attackParams?.x ?: 0
+                        startY = attackParams?.y ?: 0
+                        movingBtn = false
+                        // start attack after short delay unless dragged
+                        mainHandler.postDelayed({
+                            if (!movingBtn && e.actionMasked != MotionEvent.ACTION_UP) {
+                                startAttack()
+                                background = circleBg(0xEEFF9500.toInt())
+                            }
+                        }, 80)
+                        true
+                    }
+                    MotionEvent.ACTION_MOVE -> {
+                        val tdx = e.rawX - downRawX
+                        val tdy = e.rawY - downRawY
+                        if (kotlin.math.abs(tdx) > 14f || kotlin.math.abs(tdy) > 14f) {
+                            if (attacking) stopAttack()
+                            movingBtn = true
+                            attackParams?.let { lp ->
+                                lp.x = (startX - tdx.toInt()).coerceAtLeast(0)
+                                lp.y = (startY - tdy.toInt()).coerceAtLeast(0)
+                                try {
+                                    windowManager?.updateViewLayout(v, lp)
+                                } catch (_: Exception) {
+                                }
+                            }
+                        }
+                        true
+                    }
+                    MotionEvent.ACTION_UP, MotionEvent.ACTION_CANCEL -> {
+                        if (movingBtn) {
+                            attackParams?.let {
+                                CursorPrefs.setAttackPos(this@CursorAccessibilityService, it.x, it.y)
+                                Toast.makeText(
+                                    this@CursorAccessibilityService,
+                                    "X button position saved",
+                                    Toast.LENGTH_SHORT
+                                ).show()
+                            }
+                        } else {
+                            // short tap = one click; hold already attacking until up
+                            if (!attacking) injectClick(posX, posY)
+                            stopAttack()
+                        }
+                        background = circleBg(0xCCFF3B30.toInt())
+                        true
+                    }
+                    else -> false
+                }
+            }
+        }
+        attackView = btn
+        try {
+            windowManager?.addView(btn, attackParams)
+        } catch (_: Exception) {
+        }
+    }
+
+    private fun startAttack() {
+        if (attacking) return
+        attacking = true
+        mainHandler.post(attackRunnable)
+    }
+
+    private fun stopAttack() {
+        attacking = false
+        mainHandler.removeCallbacks(attackRunnable)
     }
 
     fun applyDelta(dx: Float, dy: Float) {
@@ -407,15 +531,14 @@ class CursorAccessibilityService : AccessibilityService() {
         cursorView?.setPixelPosition(smoothX, smoothY)
     }
 
-    private fun injectClick(x: Float, y: Float) {
-        // Control layer off briefly so gesture hits the app under us
+    private fun injectClick(x: Float, y: Float, durationMs: Long = 50) {
         setControlTouchable(false)
         val path = Path().apply { moveTo(x, y) }
-        val stroke = GestureDescription.StrokeDescription(path, 0, 50)
+        val stroke = GestureDescription.StrokeDescription(path, 0, durationMs)
         val gesture = GestureDescription.Builder().addStroke(stroke).build()
         dispatchGesture(gesture, object : GestureResultCallback() {
             override fun onCompleted(gestureDescription: GestureDescription?) {
-                mainHandler.postDelayed({ setControlTouchable(true) }, 30)
+                mainHandler.postDelayed({ setControlTouchable(true) }, 20)
             }
             override fun onCancelled(gestureDescription: GestureDescription?) {
                 mainHandler.post { setControlTouchable(true) }
@@ -424,12 +547,17 @@ class CursorAccessibilityService : AccessibilityService() {
     }
 
     private fun setControlTouchable(touchable: Boolean) {
-        val view = controlView ?: return
-        val lp = controlParams ?: return
-        lp.flags = overlayFlags(touchable)
-        try {
-            windowManager?.updateViewLayout(view, lp)
-        } catch (_: Exception) {
+        listOf(
+            controlView to controlParams,
+            attackView to attackParams
+        ).forEach { (view, lp) ->
+            if (view != null && lp != null) {
+                lp.flags = overlayFlags(touchable)
+                try {
+                    windowManager?.updateViewLayout(view, lp)
+                } catch (_: Exception) {
+                }
+            }
         }
     }
 
@@ -442,8 +570,18 @@ class CursorAccessibilityService : AccessibilityService() {
         controlParams = null
     }
 
+    private fun removeAttackButton() {
+        try {
+            attackView?.let { windowManager?.removeView(it) }
+        } catch (_: Exception) {
+        }
+        attackView = null
+        attackParams = null
+    }
+
     private fun removeAllLayers() {
         removeControlLayer()
+        removeAttackButton()
         listOf(cursorView, toggleView).forEach { v ->
             try {
                 v?.let { windowManager?.removeView(it) }
