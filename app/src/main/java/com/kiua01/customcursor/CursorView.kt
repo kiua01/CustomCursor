@@ -4,17 +4,16 @@ import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.graphics.Canvas
+import android.graphics.ColorFilter
 import android.graphics.Paint
+import android.graphics.PorterDuff
+import android.graphics.PorterDuffColorFilter
 import android.graphics.drawable.Drawable
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.content.ContextCompat
 import java.io.File
 
-/**
- * Mojo-style cursor overlay view.
- * Draws a PNG (or default arrow) at (cursorX, cursorY) with scale / opacity / hotspot.
- */
 class CursorView @JvmOverloads constructor(
     context: Context,
     attrs: AttributeSet? = null,
@@ -26,7 +25,6 @@ class CursorView @JvmOverloads constructor(
     private var defaultDrawable: Drawable? =
         ContextCompat.getDrawable(context, R.drawable.cursor_default)
 
-    /** Normalized 0..1 position (screen fraction), same idea as GLFW cursorX/Y. */
     var normX = 0.5f
     var normY = 0.5f
 
@@ -35,6 +33,7 @@ class CursorView @JvmOverloads constructor(
     var hotspotX = 0.05f
     var hotspotY = 0.05f
     var cursorOpacity = 1f
+    var cursorColor = CursorPrefs.COLOR_WHITE
     var visibleCursor = true
 
     fun loadFromPrefs() {
@@ -43,10 +42,17 @@ class CursorView @JvmOverloads constructor(
         hotspotX = CursorPrefs.hotspotX(context)
         hotspotY = CursorPrefs.hotspotY(context)
         cursorOpacity = CursorPrefs.opacity(context)
+        cursorColor = CursorPrefs.cursorColor(context)
         val path = CursorPrefs.pngPath(context)
         cursorBitmap = if (!path.isNullOrBlank() && File(path).isFile) {
             BitmapFactory.decodeFile(path)
         } else null
+        // Tint default arrow
+        val filter: ColorFilter? =
+            if (cursorColor == CursorPrefs.COLOR_WHITE) null
+            else PorterDuffColorFilter(cursorColor, PorterDuff.Mode.SRC_ATOP)
+        defaultDrawable?.colorFilter = filter
+        paint.colorFilter = filter
         invalidate()
     }
 
