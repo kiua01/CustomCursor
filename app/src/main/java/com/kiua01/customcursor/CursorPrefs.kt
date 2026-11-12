@@ -23,6 +23,7 @@ object CursorPrefs {
     const val KEY_ATTACK_ENABLED = "attack_btn"
     const val KEY_ATTACK_X = "attack_x"       // px from END
     const val KEY_ATTACK_Y = "attack_y"       // px from BOTTOM
+    const val KEY_CONTROLS_PINNED = "controls_pinned"
 
     const val MODE_MOUSE = 0
     const val MODE_FINGER = 1
@@ -37,6 +38,7 @@ object CursorPrefs {
     const val COLOR_CYAN = 0xFF64D2FF.toInt()
     const val COLOR_MAGENTA = 0xFFFF2D55.toInt()
     const val COLOR_ORANGE = 0xFFFF9500.toInt()
+    const val COLOR_BLACK = 0xFF000000.toInt()
 
     fun prefs(ctx: Context): SharedPreferences =
         ctx.getSharedPreferences(NAME, Context.MODE_PRIVATE)
@@ -91,4 +93,8 @@ object CursorPrefs {
         putInt(KEY_ATTACK_X, x.coerceAtLeast(0))
         putInt(KEY_ATTACK_Y, y.coerceAtLeast(0))
     }
+
+    /** When true, trackpad and X button cannot be dragged to a new place. */
+    fun controlsPinned(ctx: Context) = prefs(ctx).getBoolean(KEY_CONTROLS_PINNED, false)
+    fun setControlsPinned(ctx: Context, v: Boolean) = prefs(ctx).edit { putBoolean(KEY_CONTROLS_PINNED, v) }
 }
